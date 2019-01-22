@@ -1233,6 +1233,13 @@ RFB.prototype = {
             this._fb_depth = 8;
         }
 
+        if (this._fb_name === "obmc iKVM") {
+            Log.Warn("npcm7xx hextile only supports 16 bit depths. Using low color mode.");
+            this._fb_depth = 16;
+        }
+
+        this._display._fb_depth = this._fb_depth;
+
         RFB.messages.pixelFormat(this._sock, this._fb_depth, true);
         this._sendEncodings();
         RFB.messages.fbUpdateRequest(this._sock, false, 0, 0, this._fb_width, this._fb_height);
@@ -1256,9 +1263,11 @@ RFB.prototype = {
         // Only supported with full depth support
         if (this._fb_depth == 24) {
             encs.push(encodings.encodingTight);
-            encs.push(encodings.encodingHextile);
             encs.push(encodings.encodingRRE);
         }
+        if (this._fb_depth >= 16)
+            encs.push(encodings.encodingHextile);
+
         encs.push(encodings.encodingRaw);
 
         // Psuedo-encoding settings
@@ -1995,6 +2004,10 @@ RFB.encodingHandlers = {
     HEXTILE: function () {
         var rQ = this._sock.get_rQ();
         var rQi = this._sock.get_rQi();
+        var hbyte  = 4;
+
+        if (this._fb_depth == 16)
+            hbyte = 2;
 
         if (this._FBU.tiles === 0) {
             this._FBU.tiles_x = Math.ceil(this._FBU.width / 16);
@@ -2024,20 +2037,20 @@ RFB.encodingHandlers = {
 
             // Figure out how much we are expecting
             if (subencoding & 0x01) {  // Raw
-                this._FBU.bytes += w * h * 4;
+                this._FBU.bytes += w * h * hbyte;
             } else {
                 if (subencoding & 0x02) {  // Background
-                    this._FBU.bytes += 4;
+                    this._FBU.bytes += hbyte;
                 }
                 if (subencoding & 0x04) {  // Foreground
-                    this._FBU.bytes += 4;
+                    this._FBU.bytes += hbyte;
                 }
                 if (subencoding & 0x08) {  // AnySubrects
                     this._FBU.bytes++;  // Since we aren't shifting it off
                     if (this._sock.rQwait("hextile subrects header", this._FBU.bytes)) { return false; }
                     subrects = rQ[rQi + this._FBU.bytes - 1];  // Peek
                     if (subencoding & 0x10) {  // SubrectsColoured
-                        this._FBU.bytes += subrects * (4 + 2);
+                        this._FBU.bytes += subrects * (hbyte + 2);
                     } else {
                         this._FBU.bytes += subrects * 2;
                     }
@@ -2061,12 +2074,18 @@ RFB.encodingHandlers = {
                 rQi += this._FBU.bytes - 1;
             } else {
                 if (this._FBU.subencoding & 0x02) {  // Background
-                    this._FBU.background = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
-                    rQi += 4;
+                    if (this._fb_depth == 16)
+                        this._FBU.background = [rQ[rQi], rQ[rQi + 1]];
+                    else
+                        this._FBU.background = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
+                    rQi += hbyte;
                 }
                 if (this._FBU.subencoding & 0x04) {  // Foreground
-                    this._FBU.foreground = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
-                    rQi += 4;
+                    if (this._fb_depth == 16)
+                        this._FBU.foreground = [rQ[rQi], rQ[rQi + 1]];
+                    else
+                        this._FBU.foreground = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
+                    rQi += hbyte;
                 }
 
                 this._display.startTile(x, y, w, h, this._FBU.background);
@@ -2077,8 +2096,12 @@ RFB.encodingHandlers = {
                     for (var s = 0; s < subrects; s++) {
                         var color;
                         if (this._FBU.subencoding & 0x10) {  // SubrectsColoured
-                            color = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
-                            rQi += 4;
+                            if (this._fb_depth == 16)
+                                color = [rQ[rQi], rQ[rQi + 1]];
+                            else
+                                color = [rQ[rQi], rQ[rQi + 1], rQ[rQi + 2], rQ[rQi + 3]];
+
+                            rQi += hbyte;
                         } else {
                             color = this._FBU.foreground;
                         }
