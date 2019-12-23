@@ -1211,6 +1211,13 @@ export default class RFB extends EventTargetMixin {
             this._fb_depth = 8;
         }
 
+        if (this._fb_name === "obmc iKVM") {
+            Log.Warn("npcm7xx hextile only supports 16 bit depths. Using low color mode.");
+            this._fb_depth = 16;
+        }
+
+        this._display._fb_depth = this._fb_depth;
+
         RFB.messages.pixelFormat(this._sock, this._fb_depth, true);
         this._sendEncodings();
         RFB.messages.fbUpdateRequest(this._sock, false, 0, 0, this._fb_width, this._fb_height);
@@ -1228,9 +1235,12 @@ export default class RFB extends EventTargetMixin {
         if (this._fb_depth == 24) {
             encs.push(encodings.encodingTight);
             encs.push(encodings.encodingTightPNG);
-            encs.push(encodings.encodingHextile);
             encs.push(encodings.encodingRRE);
         }
+
+        if (this._fb_depth >= 16)
+            encs.push(encodings.encodingHextile);
+
         encs.push(encodings.encodingRaw);
 
         // Psuedo-encoding settings
