@@ -53,6 +53,7 @@ export default class RFB extends EventTargetMixin {
         this._shared = 'shared' in options ? !!options.shared : true;
         this._repeaterID = options.repeaterID || '';
         this._showDotCursor = options.showDotCursor || false;
+        this._wsProtocols = options.wsProtocols || ['binary'];
 
         // Internal state
         this._rfb_connection_state = '';
@@ -397,7 +398,7 @@ export default class RFB extends EventTargetMixin {
 
         try {
             // WebSocket.onopen transitions to the RFB init states
-            this._sock.open(this._url, ['binary']);
+            this._sock.open(this._url, this._wsProtocols);
         } catch (e) {
             if (e.name === 'SyntaxError') {
                 this._fail("Invalid host or port (" + e + ")");
@@ -1181,18 +1182,6 @@ export default class RFB extends EventTargetMixin {
                   ", red_shift: " + red_shift +
                   ", green_shift: " + green_shift +
                   ", blue_shift: " + blue_shift);
-
-        if (big_endian !== 0) {
-            Log.Warn("Server native endian is not little endian");
-        }
-
-        if (red_shift !== 16) {
-            Log.Warn("Server native red-shift is not 16");
-        }
-
-        if (blue_shift !== 0) {
-            Log.Warn("Server native blue-shift is not 0");
-        }
 
         // we're past the point where we could backtrack, so it's safe to call this
         this.dispatchEvent(new CustomEvent(
